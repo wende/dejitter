@@ -1,8 +1,22 @@
 {
   "name": "dejitter",
-  "version": "1.0.0",
-  "description": "A browser-injectable animation frame recorder that captures every `requestAnimationFrame` at full speed, then downsamples intelligently and auto-detects visual anomalies.",
-  "main": "recorder.js",
+  "version": "1.0.4",
+  "description": "Browser-injectable animation recorder & jank detector. Records every rAF at full speed, downsamples intelligently, and auto-detects jitter, flicker, shiver, jumps, stutter, and outliers.",
+  "main": "index.js",
+  "module": "index.mjs",
+  "exports": {
+    ".": {
+      "import": "./index.mjs",
+      "require": "./index.js"
+    },
+    "./recorder": "./recorder.js"
+  },
+  "files": [
+    "index.js",
+    "index.mjs",
+    "recorder.js",
+    "README.md"
+  ],
   "scripts": {
     "test": "playwright test"
   },
@@ -10,10 +24,20 @@
     "type": "git",
     "url": "git+https://github.com/wende/dejitter.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "keywords": [
+    "animation",
+    "jitter",
+    "jank",
+    "recorder",
+    "requestAnimationFrame",
+    "performance",
+    "debugging",
+    "flicker",
+    "shiver",
+    "stutter"
+  ],
+  "author": "wende",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/wende/dejitter/issues"
   },
