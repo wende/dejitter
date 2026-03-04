@@ -7,7 +7,10 @@
     {
       "name": "dejitter",
       "description": "Browser-injectable animation recorder & jank detector. Record rAF at full speed, auto-detect jitter, flicker, shiver, jumps, and outliers.",
-      "source": "."
+      "source": {
+        "source": "url",
+        "url": "https://github.com/wende/dejitter.git"
+      }
     }
   ]
 }
