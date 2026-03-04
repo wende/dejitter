@@ -1,7 +1,7 @@
 {
   "name": "dejitter",
   "description": "Browser-injectable animation recorder & jank detector. Record rAF at full speed, auto-detect jitter, flicker, shiver, jumps, and outliers.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "wende"
   }
