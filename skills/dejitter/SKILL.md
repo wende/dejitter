@@ -37,6 +37,12 @@ dejitter.configure({
   minTextLength: 0,     // ignore elements with shorter text (default: 0)
   mutations: false,     // observe DOM mutations (default: false)
   idleTimeout: 2000,    // auto-stop after ms of no changes, 0 = off (default: 2000)
+  thresholds: {         // anomaly detection sensitivity (override individual values)
+    jitter:  { minDeviation: 1, maxDuration: 1000, highSeverity: 20, medSeverity: 5 },
+    shiver:  { minReversals: 5, minDensity: 0.3, highDensity: 0.7, medDensity: 0.5, minDelta: 0.01 },
+    jump:    { medianMultiplier: 10, minAbsolute: 50, highMultiplier: 50, medMultiplier: 20 },
+    outlier: { ratioThreshold: 3 },
+  },
 });
 ```
 
@@ -119,3 +125,24 @@ dejitter.getData()
 - `mutations: true` helps correlate DOM changes with visual glitches
 - The UI button shows a findings summary (count by severity) after stopping
 - `onStop(callback)` lets you register hooks that fire after recording ends
+
+## Tips for AI Agents
+
+### Trust the frame count, not the findings count
+- If `rawFrameCount` is < 10 after a multi-second interaction, **the recorder is not working**. Do NOT conclude "no anomalies" — diagnose why frames aren't being captured.
+- A working recording during active UI changes should produce dozens to hundreds of frames.
+
+### Keep selectors minimal
+- Start with the **one container element** that matters (e.g., `'main'` for a scrollable chat).
+- NEVER use broad attribute selectors like `[class*="flex"]` — matching hundreds of elements causes layout thrashing that creates artificial anomalies (observer effect).
+- Add more selectors only after confirming the recorder is capturing frames.
+
+### Timing matters
+- The recorder has an `idleTimeout` — if no DOM changes happen within that window after `start()`, it auto-stops.
+- Minimize delay between `dejitter.start()` and the user interaction that triggers animation. Do both in the same `evaluate_script` call if possible, or send the message immediately after starting.
+- Set `idleTimeout` high (5000-10000ms) when tool call roundtrips add latency before the interaction begins.
+
+### When results look wrong, debug the tool first
+- Check `dejitter.getRaw()` mid-recording to verify frames are accumulating.
+- Check `dejitter.summary()` for `elementsTracked` — if 0, your selector matched nothing.
+- If frame count is stuck at 1, the recorder captured the initial snapshot but never detected changes. The elements may not be changing the tracked props, or the recorder may have auto-stopped.

@@ -38,6 +38,13 @@
     mutations: false,
     /** Auto-stop after this many ms of no changes (samples or mutations). 0 = disabled. */
     idleTimeout: 2000,
+    /** Anomaly detection thresholds. Override individual values to tune sensitivity. */
+    thresholds: {
+      jitter: { minDeviation: 1, maxDuration: 1000, highSeverity: 20, medSeverity: 5 },
+      shiver: { minReversals: 5, minDensity: 0.3, highDensity: 0.7, medDensity: 0.5, minDelta: 0.01 },
+      jump: { medianMultiplier: 10, minAbsolute: 50, highMultiplier: 50, medMultiplier: 20 },
+      outlier: { ratioThreshold: 3 },
+    },
   };
 
   let config = { ...DEFAULT_CONFIG };
@@ -434,8 +441,9 @@
         if (p.raw <= 1) continue;
         // Outlier: significantly different from median, and not in the majority
         const ratio = median > 0 ? p.raw / median : p.raw;
+        const rt = config.thresholds.outlier.ratioThreshold;
         const isOutlier =
-          (ratio > 3 || ratio < 0.33) && // 3x different from median
+          (ratio > rt || ratio < 1 / rt) && // significantly different from median
           p.raw !== counts[counts.length - 1] && // not the most common count
           p.raw !== counts[0]; // not the least common count (usually 1)
         if (isOutlier) {
@@ -461,7 +469,7 @@
     for (let i = 2; i < numeric.length; i++) {
       const d1 = numeric[i - 1].val - numeric[i - 2].val;
       const d2 = numeric[i].val - numeric[i - 1].val;
-      if (Math.abs(d1) > 0.01 && Math.abs(d2) > 0.01 && d1 * d2 < 0) {
+      if (Math.abs(d1) > config.thresholds.shiver.minDelta && Math.abs(d2) > config.thresholds.shiver.minDelta && d1 * d2 < 0) {
         reversals++;
       }
     }
@@ -484,9 +492,10 @@
       const label = elements[outlier.elem];
 
       if (bounce) {
+        const jt = config.thresholds.jitter;
         findings.push(makeFinding(
           'jitter',
-          bounce.peakDeviation > 20 ? 'high' : bounce.peakDeviation > 5 ? 'medium' : 'low',
+          bounce.peakDeviation > jt.highSeverity ? 'high' : bounce.peakDeviation > jt.medSeverity ? 'medium' : 'low',
           outlier.elem, label, outlier.prop,
           `${outlier.prop} bounces from ${bounce.restValue} to ${bounce.peak} and back over ${bounce.duration}ms at t=${bounce.startT}ms`,
           { rawChanges: outlier.raw, medianForElement: outlier.median, bounce, timeline }
@@ -507,11 +516,12 @@
 
       const timeline = getTimeline(p.elem, p.prop);
       const bounce = detectBounce(timeline);
-      if (bounce && bounce.peakDeviation > 1 && bounce.duration < 1000) {
+      const jt = config.thresholds.jitter;
+      if (bounce && bounce.peakDeviation > jt.minDeviation && bounce.duration < jt.maxDuration) {
         const isFlicker = p.prop === 'opacity';
         findings.push(makeFinding(
           isFlicker ? 'flicker' : 'jitter',
-          bounce.peakDeviation > 20 ? 'high' : bounce.peakDeviation > 5 ? 'medium' : 'low',
+          bounce.peakDeviation > jt.highSeverity ? 'high' : bounce.peakDeviation > jt.medSeverity ? 'medium' : 'low',
           p.elem, elements[p.elem], p.prop,
           `${p.prop} bounces from ${bounce.restValue} to ${bounce.peak} and back over ${bounce.duration}ms at t=${bounce.startT}ms`,
           { rawChanges: p.raw, bounce, timeline }
@@ -546,7 +556,8 @@
       const reversals = countReversals(numeric);
       const reversalDensity = reversals / (numeric.length - 2);
 
-      if (reversalDensity > 0.3 && reversals >= 5) {
+      const st = config.thresholds.shiver;
+      if (reversalDensity > st.minDensity && reversals >= st.minReversals) {
         const uniqueVals = [...new Set(numeric.map((n) => Math.round(n.val * 10) / 10))];
         const isTwoValueFight = uniqueVals.length <= 4;
 
@@ -556,7 +567,7 @@
 
         findings.push(makeFinding(
           'shiver',
-          reversalDensity > 0.7 ? 'high' : reversalDensity > 0.5 ? 'medium' : 'low',
+          reversalDensity > st.highDensity ? 'high' : reversalDensity > st.medDensity ? 'medium' : 'low',
           p.elem, elements[p.elem], p.prop,
           isTwoValueFight
             ? `${p.prop} oscillates between ${Math.min(...vals)} and ${Math.max(...vals)} at ${hz}Hz — two forces fighting (${Math.round(reversalDensity * 100)}% frames reverse)`
@@ -615,11 +626,12 @@
       const medianDelta = sortedDeltas[Math.floor(sortedDeltas.length / 2)];
       if (medianDelta === 0) continue;
 
+      const jmpT = config.thresholds.jump;
       for (const d of deltas) {
-        if (d.delta > medianDelta * 10 && d.delta > 50) {
+        if (d.delta > medianDelta * jmpT.medianMultiplier && d.delta > jmpT.minAbsolute) {
           findings.push(makeFinding(
             'jump',
-            d.delta > medianDelta * 50 ? 'high' : d.delta > medianDelta * 20 ? 'medium' : 'low',
+            d.delta > medianDelta * jmpT.highMultiplier ? 'high' : d.delta > medianDelta * jmpT.medMultiplier ? 'medium' : 'low',
             p.elem, elements[p.elem], p.prop,
             `${p.prop} jumps from ${d.from} to ${d.to} at t=${d.t}ms (${Math.round(d.delta)}px, typical step is ${Math.round(medianDelta * 10) / 10}px)`,
             {
@@ -723,7 +735,16 @@
 
   window.dejitter = {
     configure(opts = {}) {
-      config = { ...DEFAULT_CONFIG, ...opts };
+      const { thresholds: userThresholds, ...rest } = opts;
+      config = { ...DEFAULT_CONFIG, ...rest };
+      if (userThresholds) {
+        config.thresholds = { ...DEFAULT_CONFIG.thresholds };
+        for (const key of Object.keys(userThresholds)) {
+          if (DEFAULT_CONFIG.thresholds[key]) {
+            config.thresholds[key] = { ...DEFAULT_CONFIG.thresholds[key], ...userThresholds[key] };
+          }
+        }
+      }
       return config;
     },
 
@@ -743,7 +764,8 @@
       if (config.maxDuration > 0) {
         stopTimer = setTimeout(() => this.stop(), config.maxDuration);
       }
-      return `Recording (outputRate=${config.sampleRate}/s, max=${config.maxDuration}ms, idle=${config.idleTimeout}ms, props=[${config.props}], mutations=${config.mutations})`;
+      const elemCount = document.querySelectorAll(config.selector).length;
+      return `Recording ${elemCount} elements (outputRate=${config.sampleRate}/s, max=${config.maxDuration}ms, idle=${config.idleTimeout}ms, props=[${config.props}], mutations=${config.mutations})`;
     },
 
     stop() {

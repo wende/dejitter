@@ -12,8 +12,7 @@ A browser-injectable animation frame recorder that captures every `requestAnimat
 ## Install as Claude Code plugin
 
 ```
-/plugin marketplace add wende/dejitter
-/plugin install dejitter@wende-dejitter
+claude plugin add dejitter from wende/dejitter
 ```
 
 Then use `/dejitter` in any conversation to get injection and usage instructions.
@@ -82,8 +81,30 @@ dejitter.configure({
   minTextLength: 0,     // ignore elements with short text
   mutations: false,     // observe DOM mutations
   idleTimeout: 2000,    // auto-stop after idle ms (0 = off)
+  thresholds: {         // anomaly detection sensitivity (partial overrides OK)
+    jitter:  { minDeviation: 1, maxDuration: 1000, highSeverity: 20, medSeverity: 5 },
+    shiver:  { minReversals: 5, minDensity: 0.3, highDensity: 0.7, medDensity: 0.5, minDelta: 0.01 },
+    jump:    { medianMultiplier: 10, minAbsolute: 50, highMultiplier: 50, medMultiplier: 20 },
+    outlier: { ratioThreshold: 3 },
+  },
 });
 ```
+
+Only specify the values you want to change — unset values keep their defaults.
+
+| Detector | Key | Default | Meaning |
+|----------|-----|---------|---------|
+| jitter | `minDeviation` | 1 | Min peak deviation to report |
+| jitter | `maxDuration` | 1000 | Max bounce duration (ms) |
+| jitter | `highSeverity` / `medSeverity` | 20 / 5 | Severity breakpoints |
+| shiver | `minReversals` | 5 | Min direction reversals to flag |
+| shiver | `minDensity` | 0.3 | Min reversal density to flag |
+| shiver | `highDensity` / `medDensity` | 0.7 / 0.5 | Severity breakpoints |
+| shiver | `minDelta` | 0.01 | Ignore deltas smaller than this |
+| jump | `medianMultiplier` | 10 | Delta must exceed median × this |
+| jump | `minAbsolute` | 50 | Min absolute delta (px) |
+| jump | `highMultiplier` / `medMultiplier` | 50 / 20 | Severity breakpoints |
+| outlier | `ratioThreshold` | 3 | Change-count ratio vs median to flag |
 
 ### Special props
 
