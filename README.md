@@ -9,7 +9,16 @@ A browser-injectable animation frame recorder that captures every `requestAnimat
 - **Analyzes** recordings to detect jitter, flicker, shiver (oscillation), sudden jumps, and statistical outliers
 - **Reports** findings with severity levels, element identification, and detailed metadata
 
-## Quick start
+## Install as Claude Code plugin
+
+```
+/plugin marketplace add wende/dejitter
+/plugin install dejitter@wende-dejitter
+```
+
+Then use `/dejitter` in any conversation to get injection and usage instructions.
+
+## Quick start (manual)
 
 Inject into any page:
 

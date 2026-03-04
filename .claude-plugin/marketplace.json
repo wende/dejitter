@@ -1,0 +1,13 @@
+{
+  "name": "dejitter-marketplace",
+  "owner": {
+    "name": "wende"
+  },
+  "plugins": [
+    {
+      "name": "dejitter",
+      "description": "Browser-injectable animation recorder & jank detector. Record rAF at full speed, auto-detect jitter, flicker, shiver, jumps, and outliers.",
+      "source": "."
+    }
+  ]
+}
