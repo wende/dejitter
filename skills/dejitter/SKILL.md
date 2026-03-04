@@ -7,11 +7,13 @@ description: Inject the Dejitter animation recorder into a browser page to detec
 
 ## Step 1. Serve and inject
 
-The recorder script is bundled with this plugin. Serve it and inject into the target page:
+The recorder script is bundled with this plugin. First find where it's cached, serve it, then inject:
 
 ```bash
-# Start file server pointing at the plugin directory (once per session)
-cd !`dirname "$(find ~/.claude -path '*/dejitter/recorder.js' -print -quit 2>/dev/null || echo .)"` && python3 -m http.server 8787 --bind 127.0.0.1 &
+# Find the plugin cache path and serve it (once per session)
+find ~/.claude/plugins -name 'recorder.js' -path '*/dejitter/*' -print -quit
+# Then cd to the directory containing recorder.js and serve:
+# cd <that directory> && python3 -m http.server 8787 --bind 127.0.0.1 &
 ```
 
 Then inject via `evaluate_script` or equivalent:

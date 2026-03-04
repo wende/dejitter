@@ -1,0 +1,24 @@
+{
+  "name": "dejitter",
+  "version": "1.0.0",
+  "description": "A browser-injectable animation frame recorder that captures every `requestAnimationFrame` at full speed, then downsamples intelligently and auto-detects visual anomalies.",
+  "main": "recorder.js",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wende/dejitter.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/wende/dejitter/issues"
+  },
+  "homepage": "https://github.com/wende/dejitter#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}

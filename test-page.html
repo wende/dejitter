@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head><title>Dejitter Test Page</title>
+<style>
+  body { font-family: system-ui; padding: 40px; }
+  .box { width: 100px; height: 100px; background: coral; margin: 20px; }
+  .jittery { animation: jitter 0.1s infinite; }
+  .bouncy { animation: bounce 0.5s ease-in-out 3; }
+  .fader { animation: flick 0.3s ease-in-out 5; }
+  @keyframes jitter {
+    0%, 100% { transform: translateY(0); }
+    25% { transform: translateY(-3px); }
+    75% { transform: translateY(3px); }
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-80px); }
+  }
+  @keyframes flick {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+</style>
+</head>
+<body>
+  <h1>Dejitter Test</h1>
+  <div class="box jittery" id="a">Jitter</div>
+  <div class="box bouncy" id="b">Bounce</div>
+  <div class="box fader" id="c">Flicker</div>
+  <script src="recorder.js"></script>
+</body>
+</html>
