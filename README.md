@@ -6,7 +6,7 @@ A browser-injectable animation frame recorder that captures every `requestAnimat
 
 - **Records** computed style changes, bounding rects, scroll positions, and DOM mutations across all (or selected) elements at full rAF speed
 - **Downsamples** output to a configurable sample rate — rare discrete changes are kept as-is, continuous properties are evenly sampled
-- **Analyzes** recordings to detect jitter, flicker, shiver (oscillation), sudden jumps, and statistical outliers
+- **Analyzes** recordings to detect jitter, flicker, shiver (oscillation), sudden jumps, stutter (mid-motion reversals), and statistical outliers
 - **Reports** findings with severity levels, element identification, and detailed metadata
 
 ## Install as Claude Code plugin
@@ -68,6 +68,7 @@ dejitter.findings();  // YAML report of detected anomalies
 | **flicker** | Opacity-specific bounce — element appears/disappears |
 | **shiver** | High-frequency oscillation — two forces fighting (e.g. scroll vs overscroll) |
 | **jump** | Single-frame discontinuity far exceeding typical delta |
+| **stutter** | Brief mid-motion direction reversal (1–3 frames) during smooth movement |
 | **outlier** | Property changing at statistically unusual rate vs siblings |
 
 ## Configuration
@@ -85,6 +86,7 @@ dejitter.configure({
     jitter:  { minDeviation: 1, maxDuration: 1000, highSeverity: 20, medSeverity: 5 },
     shiver:  { minReversals: 5, minDensity: 0.3, highDensity: 0.7, medDensity: 0.5, minDelta: 0.01 },
     jump:    { medianMultiplier: 10, minAbsolute: 50, highMultiplier: 50, medMultiplier: 20 },
+    stutter: { velocityRatio: 0.3, maxFrames: 3, minVelocity: 0.5 },
     outlier: { ratioThreshold: 3 },
   },
 });
@@ -104,6 +106,9 @@ Only specify the values you want to change — unset values keep their defaults.
 | jump | `medianMultiplier` | 10 | Delta must exceed median × this |
 | jump | `minAbsolute` | 50 | Min absolute delta (px) |
 | jump | `highMultiplier` / `medMultiplier` | 50 / 20 | Severity breakpoints |
+| stutter | `velocityRatio` | 0.3 | Reversal magnitude / local velocity threshold |
+| stutter | `maxFrames` | 3 | Max consecutive reversal frames to qualify |
+| stutter | `minVelocity` | 0.5 | Ignore reversals when motion is slower (px/frame) |
 | outlier | `ratioThreshold` | 3 | Change-count ratio vs median to flag |
 
 ### Special props

@@ -43,6 +43,7 @@
       jitter: { minDeviation: 1, maxDuration: 1000, highSeverity: 20, medSeverity: 5 },
       shiver: { minReversals: 5, minDensity: 0.3, highDensity: 0.7, medDensity: 0.5, minDelta: 0.01 },
       jump: { medianMultiplier: 10, minAbsolute: 50, highMultiplier: 50, medMultiplier: 20 },
+      stutter: { velocityRatio: 0.3, maxFrames: 3, minVelocity: 0.5 },
       outlier: { ratioThreshold: 3 },
     },
   };
@@ -654,7 +655,125 @@
   }
 
   /**
-   * Section 5: deduplicate shivers — when many elements shiver at the same Hz on the
+   * Section 5: detect stutter — a brief mid-motion direction reversal (1–3 frames)
+   * during otherwise smooth movement. Unlike shiver (many reversals) or bounce
+   * (return to rest), stutter is a momentary hiccup in continuous motion.
+   */
+  function detectStutterFindings(propStats, elements, existingFindings) {
+    const findings = [];
+    const st = config.thresholds.stutter;
+
+    for (const p of propStats.props) {
+      if (p.raw < 6) continue;
+      if (existingFindings.some((f) => f.elem === p.elem && f.prop === p.prop)) continue;
+
+      const timeline = getTimeline(p.elem, p.prop);
+      if (timeline.length < 6) continue;
+
+      const numeric = [];
+      for (const { t, value } of timeline) {
+        const n = extractNumeric(value);
+        if (n !== null) numeric.push({ t, val: n });
+      }
+      if (numeric.length < 6) continue;
+
+      // Compute signed deltas
+      const deltas = [];
+      for (let i = 1; i < numeric.length; i++) {
+        deltas.push(numeric[i].val - numeric[i - 1].val);
+      }
+
+      // Find reversal frames: where delta sign flips against dominant local direction
+      // dominant direction = sign of mean delta over ~5 frames before the reversal
+      const windowSize = 5;
+      let i = 0;
+      while (i < deltas.length) {
+        // Determine dominant direction from preceding window
+        const winStart = Math.max(0, i - windowSize);
+        if (i - winStart < 2) { i++; continue; }
+
+        let sum = 0;
+        for (let w = winStart; w < i; w++) sum += deltas[w];
+        const dominantDir = Math.sign(sum);
+        if (dominantDir === 0) { i++; continue; }
+
+        // Check if current delta reverses against dominant direction
+        if (deltas[i] !== 0 && Math.sign(deltas[i]) !== dominantDir) {
+          // Found a reversal — group consecutive reversal frames
+          const reversalStart = i;
+          let reversalEnd = i;
+          while (
+            reversalEnd + 1 < deltas.length &&
+            reversalEnd - reversalStart + 1 < st.maxFrames &&
+            deltas[reversalEnd + 1] !== 0 &&
+            Math.sign(deltas[reversalEnd + 1]) !== dominantDir
+          ) {
+            reversalEnd++;
+          }
+
+          const reversalFrameCount = reversalEnd - reversalStart + 1;
+
+          // Check that motion resumes in dominant direction after the reversal
+          const afterIdx = reversalEnd + 1;
+          if (afterIdx >= deltas.length || Math.sign(deltas[afterIdx]) !== dominantDir) {
+            i = reversalEnd + 1;
+            continue;
+          }
+
+          // Compute reversal magnitude (sum of reversal deltas, absolute)
+          let reversalMag = 0;
+          for (let r = reversalStart; r <= reversalEnd; r++) {
+            reversalMag += Math.abs(deltas[r]);
+          }
+
+          // Compute local velocity: mean abs delta of surrounding non-reversal frames
+          const localStart = Math.max(0, reversalStart - windowSize);
+          const localEnd = Math.min(deltas.length - 1, reversalEnd + windowSize);
+          let localSum = 0;
+          let localCount = 0;
+          for (let l = localStart; l <= localEnd; l++) {
+            if (l >= reversalStart && l <= reversalEnd) continue;
+            localSum += Math.abs(deltas[l]);
+            localCount++;
+          }
+          const localVelocity = localCount > 0 ? localSum / localCount : 0;
+
+          if (localVelocity >= st.minVelocity) {
+            const ratio = reversalMag / localVelocity;
+            if (ratio >= st.velocityRatio) {
+              const severity = ratio >= 1.0 ? 'high' : ratio >= 0.5 ? 'medium' : 'low';
+              const t = numeric[reversalStart + 1].t; // +1 because deltas[i] is between numeric[i] and numeric[i+1]
+              findings.push(makeFinding(
+                'stutter', severity,
+                p.elem, elements[p.elem], p.prop,
+                `${p.prop} reverses for ${reversalFrameCount} frame${reversalFrameCount > 1 ? 's' : ''} at t=${t}ms during smooth motion (reversal ${Math.round(reversalMag * 10) / 10}px vs local velocity ${Math.round(localVelocity * 10) / 10}px/frame, ratio ${Math.round(ratio * 100) / 100})`,
+                {
+                  rawChanges: p.raw,
+                  stutter: {
+                    t,
+                    reversalFrames: reversalFrameCount,
+                    reversalMagnitude: Math.round(reversalMag * 10) / 10,
+                    localVelocity: Math.round(localVelocity * 10) / 10,
+                    ratio: Math.round(ratio * 100) / 100,
+                    dominantDirection: dominantDir > 0 ? 'increasing' : 'decreasing',
+                  },
+                }
+              ));
+            }
+          }
+
+          i = reversalEnd + 1;
+        } else {
+          i++;
+        }
+      }
+    }
+
+    return findings;
+  }
+
+  /**
+   * Section 6: deduplicate shivers — when many elements shiver at the same Hz on the
    * same property, it's a single root-cause event. Group them and report the scroll
    * container (or first element) with an affectedElements count.
    */
@@ -696,6 +815,7 @@
     let findings = detectOutlierFindings(propStats, elements);
     findings = findings.concat(detectShiverFindings(propStats, elements, findings));
     findings = findings.concat(detectJumpFindings(propStats, elements, findings));
+    findings = findings.concat(detectStutterFindings(propStats, elements, findings));
     findings = deduplicateShivers(findings);
 
     // Sort by severity

@@ -41,6 +41,7 @@ dejitter.configure({
     jitter:  { minDeviation: 1, maxDuration: 1000, highSeverity: 20, medSeverity: 5 },
     shiver:  { minReversals: 5, minDensity: 0.3, highDensity: 0.7, medDensity: 0.5, minDelta: 0.01 },
     jump:    { medianMultiplier: 10, minAbsolute: 50, highMultiplier: 50, medMultiplier: 20 },
+    stutter: { velocityRatio: 0.3, maxFrames: 3, minVelocity: 0.5 },
     outlier: { ratioThreshold: 3 },
   },
 });
@@ -80,6 +81,7 @@ Finding types:
 - **flicker** — opacity-specific bounce (element appears/disappears)
 - **shiver** — high-frequency oscillation with many direction reversals (two forces fighting)
 - **jump** — single-frame discontinuity far larger than typical delta
+- **stutter** — brief mid-motion direction reversal (1–3 frames) during smooth movement
 - **outlier** — property changes at unusual rate vs siblings on same element
 
 Severities: `high`, `medium`, `low`, `info`
