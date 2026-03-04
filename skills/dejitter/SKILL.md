@@ -1,27 +1,30 @@
-# Dejitter — Usage Guide
+---
+name: dejitter
+description: Inject the Dejitter animation recorder into a browser page to detect jitter, flicker, shiver, jumps, and layout anomalies. Use when debugging visual glitches or animation issues.
+---
 
-## Step 1. Initialization
+# Dejitter — Animation Recorder & Jank Detector
 
-Start the static file server (once per session):
+## Step 1. Serve and inject
+
+The recorder script is bundled with this plugin. Serve it and inject into the target page:
 
 ```bash
-cd /Users/wende/projects/dejitter && python3 -m http.server 8787 --bind 127.0.0.1 &
+# Start file server pointing at the plugin directory (once per session)
+cd !`dirname "$(find ~/.claude -path '*/dejitter/recorder.js' -print -quit 2>/dev/null || echo .)"` && python3 -m http.server 8787 --bind 127.0.0.1 &
 ```
 
-After navigating to a page, inject the recorder:
+Then inject via `evaluate_script` or equivalent:
 
 ```js
-// evaluate_script
 const s = document.createElement('script');
 s.src = 'http://localhost:8787/recorder.js';
 document.head.appendChild(s);
 ```
 
-> Note: The script does not survive page refreshes. Re-inject after each navigation.
+> The script does not survive page refreshes. Re-inject after each navigation.
 
 ## Step 2. Configure
-
-Call `configure()` before recording to set what to track:
 
 ```js
 dejitter.configure({
@@ -64,7 +67,7 @@ dejitter.findings()      // → YAML string (default)
 dejitter.findings(true)  // → raw array of finding objects
 ```
 
-Finding types detected:
+Finding types:
 - **jitter** — property bounces from rest → deviation → rest (layout thrashing)
 - **flicker** — opacity-specific bounce (element appears/disappears)
 - **shiver** — high-frequency oscillation with many direction reversals (two forces fighting)
@@ -73,19 +76,13 @@ Finding types detected:
 
 Severities: `high`, `medium`, `low`, `info`
 
-### Summary
+### Summary & export
 
 ```js
-dejitter.summary()       // → YAML string
-dejitter.summary(true)   // → raw object
-```
-
-### Full data export
-
-```js
-dejitter.getData()   // → full object with samples, elements, propStats, mutations
-dejitter.toJSON()    // → JSON string of getData()
-dejitter.getRaw()    // → { rawFrames, mutations } (unprocessed, for debugging)
+dejitter.summary()       // → YAML string (pass true for raw object)
+dejitter.getData()       // → full object with samples, elements, propStats, mutations
+dejitter.toJSON()        // → JSON string of getData()
+dejitter.getRaw()        // → { rawFrames, mutations } (unprocessed)
 ```
 
 ## Typical workflow
