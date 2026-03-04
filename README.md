@@ -1,4 +1,4 @@
-# FrameTrack
+# Dejitter
 
 A browser-injectable animation frame recorder that captures every `requestAnimationFrame` at full speed, then downsamples intelligently and auto-detects visual anomalies.
 
@@ -28,14 +28,14 @@ python3 -m http.server 8787 --bind 127.0.0.1
 Then use the floating UI button or the console API:
 
 ```js
-frametrack.configure({
+dejitter.configure({
   selector: '.chat-container',
   props: ['transform', 'opacity', 'boundingRect'],
 });
-frametrack.start();
+dejitter.start();
 // ... interact with the page ...
-frametrack.stop();
-frametrack.findings();  // YAML report of detected anomalies
+dejitter.stop();
+dejitter.findings();  // YAML report of detected anomalies
 ```
 
 ## API
@@ -65,7 +65,7 @@ frametrack.findings();  // YAML report of detected anomalies
 ## Configuration
 
 ```js
-frametrack.configure({
+dejitter.configure({
   selector: '*',        // CSS selector for elements to track
   props: ['opacity', 'transform'],  // properties to sample
   sampleRate: 15,       // target output samples/sec

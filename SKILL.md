@@ -1,11 +1,11 @@
-# FrameTrack — Usage Guide
+# Dejitter — Usage Guide
 
 ## Step 1. Initialization
 
 Start the static file server (once per session):
 
 ```bash
-cd /Users/wende/projects/frametrack && python3 -m http.server 8787 --bind 127.0.0.1 &
+cd /Users/wende/projects/dejitter && python3 -m http.server 8787 --bind 127.0.0.1 &
 ```
 
 After navigating to a page, inject the recorder:
@@ -24,7 +24,7 @@ document.head.appendChild(s);
 Call `configure()` before recording to set what to track:
 
 ```js
-frametrack.configure({
+dejitter.configure({
   selector: '.chat-container, .message',  // CSS selector (default: '*')
   props: ['transform', 'opacity', 'boundingRect'],  // properties to sample
   sampleRate: 15,       // target output samples/sec (default: 15)
@@ -48,9 +48,9 @@ frametrack.configure({
 ## Step 3. Record
 
 ```js
-frametrack.start();
+dejitter.start();
 // ... interact with the page (scroll, click, wait for animations) ...
-frametrack.stop();
+dejitter.stop();
 ```
 
 Or use the floating UI button (injected automatically in the top-right corner).
@@ -60,8 +60,8 @@ Or use the floating UI button (injected automatically in the top-right corner).
 ### Findings (anomaly detection)
 
 ```js
-frametrack.findings()      // → YAML string (default)
-frametrack.findings(true)  // → raw array of finding objects
+dejitter.findings()      // → YAML string (default)
+dejitter.findings(true)  // → raw array of finding objects
 ```
 
 Finding types detected:
@@ -76,23 +76,23 @@ Severities: `high`, `medium`, `low`, `info`
 ### Summary
 
 ```js
-frametrack.summary()       // → YAML string
-frametrack.summary(true)   // → raw object
+dejitter.summary()       // → YAML string
+dejitter.summary(true)   // → raw object
 ```
 
 ### Full data export
 
 ```js
-frametrack.getData()   // → full object with samples, elements, propStats, mutations
-frametrack.toJSON()    // → JSON string of getData()
-frametrack.getRaw()    // → { rawFrames, mutations } (unprocessed, for debugging)
+dejitter.getData()   // → full object with samples, elements, propStats, mutations
+dejitter.toJSON()    // → JSON string of getData()
+dejitter.getRaw()    // → { rawFrames, mutations } (unprocessed, for debugging)
 ```
 
 ## Typical workflow
 
 ```js
 // 1. Configure for the page under test
-frametrack.configure({
+dejitter.configure({
   selector: '[class*="message"], [class*="chat"], main',
   props: ['transform', 'opacity', 'boundingRect'],
   mutations: true,
@@ -100,17 +100,17 @@ frametrack.configure({
 });
 
 // 2. Record
-frametrack.start();
+dejitter.start();
 // ... scroll, trigger animations, wait ...
 // Recording auto-stops after idle or maxDuration
 
 // 3. Check findings
-frametrack.findings()
+dejitter.findings()
 // Look for high-severity jitters, shivers, or jumps
 
 // 4. Get details if needed
-frametrack.summary()
-frametrack.getData()
+dejitter.summary()
+dejitter.getData()
 ```
 
 ## Tips

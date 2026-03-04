@@ -1,5 +1,5 @@
 /**
- * FrameTrack — Animation frame recorder
+ * Dejitter — Animation frame recorder & jank detector
  *
  * Inject into a page via evaluate_script or <script> tag.
  * Records every rAF at full speed, then downsamples intelligently on getData():
@@ -9,11 +9,11 @@
  *   - Properties with more changes than the target sample count → evenly downsampled
  *
  * Usage:
- *   frametrack.configure({ selector: 'main', props: ['opacity','transform'], sampleRate: 10 });
- *   frametrack.start();
+ *   dejitter.configure({ selector: 'main', props: ['opacity','transform'], sampleRate: 10 });
+ *   dejitter.start();
  *   // ... interact with the page ...
- *   frametrack.stop();
- *   frametrack.getData();  // → { samples: [...], summary: {...} }
+ *   dejitter.stop();
+ *   dejitter.getData();  // → { samples: [...], summary: {...} }
  */
 
 (() => {
@@ -71,15 +71,15 @@
   // Element identity
   let nextElemId = 0;
   function elemId(el) {
-    if (!el.__ft_id) {
-      el.__ft_id = `e${nextElemId++}`;
-      el.__ft_label = {
+    if (!el.__dj_id) {
+      el.__dj_id = `e${nextElemId++}`;
+      el.__dj_label = {
         tag: el.tagName.toLowerCase(),
         cls: (typeof el.className === 'string' ? el.className : '').slice(0, 80),
         text: (el.textContent || '').trim().slice(0, 60),
       };
     }
-    return el.__ft_id;
+    return el.__dj_id;
   }
 
   function readProps(el) {
@@ -153,7 +153,7 @@
     // Idle auto-stop: only after the first real modification is observed
     if (config.idleTimeout > 0 && hasSeenChange) {
       if (performance.now() - lastChangeTime >= config.idleTimeout) {
-        frametrack.stop();
+        dejitter.stop();
         return;
       }
     }
@@ -284,8 +284,8 @@
       for (const c of f.changes) seenIds.add(c.id);
     }
     document.querySelectorAll('*').forEach((el) => {
-      if (el.__ft_id && seenIds.has(el.__ft_id)) {
-        elements[el.__ft_id] = el.__ft_label || {
+      if (el.__dj_id && seenIds.has(el.__dj_id)) {
+        elements[el.__dj_id] = el.__dj_label || {
           tag: el.tagName.toLowerCase(),
           text: (el.textContent || '').trim().slice(0, 60),
         };
@@ -721,7 +721,7 @@
 
   // --- Public API ---
 
-  window.frametrack = {
+  window.dejitter = {
     configure(opts = {}) {
       config = { ...DEFAULT_CONFIG, ...opts };
       return config;
@@ -753,10 +753,10 @@
       mutationObserver?.disconnect();
 
       const msg = `Stopped. ${rawFrames.length} raw frames, ${mutations.length} mutation events.`;
-      console.log(`[frametrack:stopped] ${msg}`);
+      console.log(`[dejitter:stopped] ${msg}`);
 
       for (const cb of onStopCallbacks) {
-        try { cb(); } catch (e) { console.error('[frametrack] onStop callback error:', e); }
+        try { cb(); } catch (e) { console.error('[dejitter] onStop callback error:', e); }
       }
 
       return msg;
@@ -823,10 +823,10 @@
 
   function injectUI() {
     const el = document.createElement('div');
-    el.id = '__ft_ui';
+    el.id = '__dj_ui';
     el.innerHTML = `
       <style>
-        #__ft_ui {
+        #__dj_ui {
           position: fixed;
           top: 12px;
           right: 12px;
@@ -834,8 +834,8 @@
           font: 12px/1.4 system-ui, sans-serif;
           pointer-events: none;
         }
-        #__ft_ui * { pointer-events: auto; }
-        #__ft_btn {
+        #__dj_ui * { pointer-events: auto; }
+        #__dj_btn {
           display: flex;
           align-items: center;
           gap: 6px;
@@ -850,24 +850,24 @@
           box-shadow: 0 2px 8px rgba(0,0,0,0.3);
           transition: background 0.15s;
         }
-        #__ft_btn:hover { background: #333; }
-        #__ft_btn[data-recording="true"] { background: #c0392b; }
-        #__ft_btn[data-recording="true"]:hover { background: #e74c3c; }
-        #__ft_dot {
+        #__dj_btn:hover { background: #333; }
+        #__dj_btn[data-recording="true"] { background: #c0392b; }
+        #__dj_btn[data-recording="true"]:hover { background: #e74c3c; }
+        #__dj_dot {
           width: 8px;
           height: 8px;
           border-radius: 50%;
           background: #888;
         }
-        #__ft_btn[data-recording="true"] #__ft_dot {
+        #__dj_btn[data-recording="true"] #__dj_dot {
           background: #fff;
-          animation: __ft_pulse 1s ease-in-out infinite;
+          animation: __dj_pulse 1s ease-in-out infinite;
         }
-        @keyframes __ft_pulse {
+        @keyframes __dj_pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.3; }
         }
-        #__ft_status {
+        #__dj_status {
           margin-top: 4px;
           padding: 4px 10px;
           border-radius: 8px;
@@ -877,19 +877,19 @@
           display: none;
           max-width: 260px;
         }
-        #__ft_status.visible { display: block; }
+        #__dj_status.visible { display: block; }
       </style>
-      <button id="__ft_btn" data-recording="false">
-        <span id="__ft_dot"></span>
-        <span id="__ft_label">Record</span>
+      <button id="__dj_btn" data-recording="false">
+        <span id="__dj_dot"></span>
+        <span id="__dj_label">Record</span>
       </button>
-      <div id="__ft_status"></div>
+      <div id="__dj_status"></div>
     `;
     document.body.appendChild(el);
 
-    const btn = document.getElementById('__ft_btn');
-    const label = document.getElementById('__ft_label');
-    const status = document.getElementById('__ft_status');
+    const btn = document.getElementById('__dj_btn');
+    const label = document.getElementById('__dj_label');
+    const status = document.getElementById('__dj_status');
 
     let timer = null;
 
@@ -901,7 +901,7 @@
     }
 
     // Register stop callback to update UI
-    frametrack.onStop(() => {
+    dejitter.onStop(() => {
       btn.dataset.recording = 'false';
       label.textContent = 'Record';
 
@@ -920,12 +920,12 @@
 
     btn.addEventListener('click', () => {
       if (btn.dataset.recording === 'false') {
-        frametrack.start();
+        dejitter.start();
         btn.dataset.recording = 'true';
         label.textContent = 'Stop';
         showStatus('Recording...', 0);
       } else {
-        frametrack.stop();
+        dejitter.stop();
       }
     });
   }
