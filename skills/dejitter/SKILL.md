@@ -1,6 +1,6 @@
 ---
 name: dejitter
-description: Inject the Dejitter animation recorder into a browser page to detect jitter, flicker, shiver, jumps, and layout anomalies. Use when debugging visual glitches or animation issues.
+description: Inject the Dejitter animation recorder into a browser page to detect jitter, flicker, shiver, jumps, stuck, and layout anomalies. Use when debugging visual glitches or animation issues.
 ---
 
 # Dejitter — Animation Recorder & Jank Detector
@@ -42,6 +42,7 @@ dejitter.configure({
     shiver:  { minReversals: 5, minDensity: 0.3, highDensity: 0.7, medDensity: 0.5, minDelta: 0.01 },
     jump:    { medianMultiplier: 10, minAbsolute: 50, highMultiplier: 50, medMultiplier: 20 },
     stutter: { velocityRatio: 0.3, maxFrames: 3, minVelocity: 0.5 },
+    stuck:   { minStillFrames: 3, maxDelta: 0.5, minSurroundingVelocity: 1, highDuration: 500, medDuration: 200 },
     outlier: { ratioThreshold: 3 },
   },
 });
@@ -82,6 +83,7 @@ Finding types:
 - **shiver** — high-frequency oscillation with many direction reversals (two forces fighting)
 - **jump** — single-frame discontinuity far larger than typical delta
 - **stutter** — brief mid-motion direction reversal (1–3 frames) during smooth movement
+- **stuck** — animation stalls for several frames mid-motion then resumes
 - **outlier** — property changes at unusual rate vs siblings on same element
 
 Severities: `high`, `medium`, `low`, `info`

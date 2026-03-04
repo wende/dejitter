@@ -1,7 +1,7 @@
 {
   "name": "dejitter",
-  "version": "1.0.4",
-  "description": "Browser-injectable animation recorder & jank detector. Records every rAF at full speed, downsamples intelligently, and auto-detects jitter, flicker, shiver, jumps, stutter, and outliers.",
+  "version": "1.0.5",
+  "description": "Browser-injectable animation recorder & jank detector. Records every rAF at full speed, downsamples intelligently, and auto-detects jitter, flicker, shiver, jumps, stutter, stuck, and outliers.",
   "main": "index.js",
   "module": "index.mjs",
   "exports": {
@@ -34,7 +34,8 @@
     "debugging",
     "flicker",
     "shiver",
-    "stutter"
+    "stutter",
+    "stuck"
   ],
   "author": "wende",
   "license": "MIT",

@@ -44,6 +44,7 @@
       shiver: { minReversals: 5, minDensity: 0.3, highDensity: 0.7, medDensity: 0.5, minDelta: 0.01 },
       jump: { medianMultiplier: 10, minAbsolute: 50, highMultiplier: 50, medMultiplier: 20 },
       stutter: { velocityRatio: 0.3, maxFrames: 3, minVelocity: 0.5 },
+      stuck: { minStillFrames: 3, maxDelta: 0.5, minSurroundingVelocity: 1, highDuration: 500, medDuration: 200 },
       outlier: { ratioThreshold: 3 },
     },
   };
@@ -773,7 +774,102 @@
   }
 
   /**
-   * Section 6: deduplicate shivers — when many elements shiver at the same Hz on the
+   * Section 6: detect stuck — animation pauses for several frames mid-motion.
+   * Unlike jitter (return-to-rest), shiver (oscillation), jump (large delta),
+   * or stutter (reversal), stuck is a flat plateau during otherwise continuous motion.
+   */
+  function detectStuckFindings(propStats, elements, existingFindings) {
+    const findings = [];
+    const sk = config.thresholds.stuck;
+
+    for (const p of propStats.props) {
+      if (p.raw < 6) continue;
+      if (existingFindings.some((f) => f.elem === p.elem && f.prop === p.prop)) continue;
+
+      const timeline = getTimeline(p.elem, p.prop);
+      if (timeline.length < 6) continue;
+
+      const numeric = [];
+      for (const { t, value } of timeline) {
+        const n = extractNumeric(value);
+        if (n !== null) numeric.push({ t, val: n });
+      }
+      if (numeric.length < 6) continue;
+
+      // Compute absolute deltas between consecutive frames
+      const deltas = [];
+      for (let i = 1; i < numeric.length; i++) {
+        deltas.push(Math.abs(numeric[i].val - numeric[i - 1].val));
+      }
+
+      // Find runs of consecutive "still" frames (delta <= maxDelta)
+      let i = 0;
+      while (i < deltas.length) {
+        if (deltas[i] > sk.maxDelta) { i++; continue; }
+
+        // Start of a still run
+        const runStart = i;
+        while (i < deltas.length && deltas[i] <= sk.maxDelta) i++;
+        const runEnd = i - 1; // inclusive
+        const stillCount = runEnd - runStart + 1;
+
+        if (stillCount < sk.minStillFrames) continue;
+
+        // Check surrounding motion: mean abs delta over up to 5 frames on each side
+        const windowSize = 5;
+        let surroundingSum = 0;
+        let surroundingCount = 0;
+
+        // Before the run
+        const beforeStart = Math.max(0, runStart - windowSize);
+        for (let b = beforeStart; b < runStart; b++) {
+          surroundingSum += deltas[b];
+          surroundingCount++;
+        }
+
+        // After the run
+        const afterEnd = Math.min(deltas.length - 1, runEnd + windowSize);
+        for (let a = runEnd + 1; a <= afterEnd; a++) {
+          surroundingSum += deltas[a];
+          surroundingCount++;
+        }
+
+        if (surroundingCount === 0) continue;
+        const meanSurroundingVelocity = surroundingSum / surroundingCount;
+
+        if (meanSurroundingVelocity < sk.minSurroundingVelocity) continue;
+
+        // Duration = time from first still frame to last still frame
+        // deltas[runStart] is between numeric[runStart] and numeric[runStart+1]
+        const tStart = numeric[runStart].t;
+        const tEnd = numeric[runEnd + 1].t;
+        const duration = Math.round(tEnd - tStart);
+
+        const severity = duration >= sk.highDuration ? 'high' : duration >= sk.medDuration ? 'medium' : 'low';
+
+        findings.push(makeFinding(
+          'stuck', severity,
+          p.elem, elements[p.elem], p.prop,
+          `${p.prop} stalls for ${stillCount} frames (${duration}ms) at t=${Math.round(tStart)}ms while surrounding motion averages ${Math.round(meanSurroundingVelocity * 10) / 10}px/frame`,
+          {
+            rawChanges: p.raw,
+            stuck: {
+              t: Math.round(tStart),
+              duration,
+              stillFrames: stillCount,
+              meanSurroundingVelocity: Math.round(meanSurroundingVelocity * 10) / 10,
+              stuckValue: numeric[runStart].val,
+            },
+          }
+        ));
+      }
+    }
+
+    return findings;
+  }
+
+  /**
+   * Section 7: deduplicate shivers — when many elements shiver at the same Hz on the
    * same property, it's a single root-cause event. Group them and report the scroll
    * container (or first element) with an affectedElements count.
    */
@@ -816,6 +912,7 @@
     findings = findings.concat(detectShiverFindings(propStats, elements, findings));
     findings = findings.concat(detectJumpFindings(propStats, elements, findings));
     findings = findings.concat(detectStutterFindings(propStats, elements, findings));
+    findings = findings.concat(detectStuckFindings(propStats, elements, findings));
     findings = deduplicateShivers(findings);
 
     // Sort by severity
