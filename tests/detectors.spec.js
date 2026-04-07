@@ -293,4 +293,144 @@ test.describe('Anomaly detectors', () => {
     const outliers = findings.filter(f => f.type === 'outlier' || f.type === 'jitter');
     expect(outliers.length).toBeGreaterThanOrEqual(1);
   });
+
+  test('lag: detects slow response to user interaction', async ({ page }) => {
+    // Simulate a click at t=100, first visual change at t=220 → 120ms lag
+    const findings = await page.evaluate(() => {
+      dejitter.configure({
+        selector: '.synth',
+        props: ['transform'],
+        idleTimeout: 0,
+        thresholds: {
+          lag: { minDelay: 50, highDelay: 200, medDelay: 100 },
+        },
+      });
+
+      let el = document.querySelector('.synth-target');
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'synth synth-target';
+        el.textContent = 'synth';
+        document.body.appendChild(el);
+      }
+      el.__dj_id = 'synth0';
+      el.__dj_label = { tag: 'div', cls: 'synth synth-target', text: 'synth' };
+
+      dejitter.start();
+      dejitter.stop();
+
+      const raw = dejitter.getRaw();
+      raw.rawFrames.length = 0;
+      raw.interactions.length = 0;
+
+      // User clicks at t=100
+      raw.interactions.push({ t: 100, type: 'click' });
+
+      // First visual change at t=220 (120ms after click)
+      raw.rawFrames.push({
+        t: 220,
+        changes: [{ id: 'synth0', transform: 'matrix(1, 0, 0, 1, 0, 5)' }],
+      });
+      raw.rawFrames.push({
+        t: 236,
+        changes: [{ id: 'synth0', transform: 'matrix(1, 0, 0, 1, 0, 10)' }],
+      });
+
+      return dejitter.findings(true);
+    });
+
+    const lags = findings.filter(f => f.type === 'lag');
+    expect(lags.length).toBe(1);
+    expect(lags[0].lag.delay).toBe(120);
+    expect(lags[0].lag.interactionType).toBe('click');
+    expect(lags[0].severity).toBe('medium');
+  });
+
+  test('lag: high severity for very slow response', async ({ page }) => {
+    const findings = await page.evaluate(() => {
+      dejitter.configure({
+        selector: '.synth',
+        props: ['transform'],
+        idleTimeout: 0,
+        thresholds: {
+          lag: { minDelay: 50, highDelay: 200, medDelay: 100 },
+        },
+      });
+
+      let el = document.querySelector('.synth-target');
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'synth synth-target';
+        el.textContent = 'synth';
+        document.body.appendChild(el);
+      }
+      el.__dj_id = 'synth0';
+      el.__dj_label = { tag: 'div', cls: 'synth synth-target', text: 'synth' };
+
+      dejitter.start();
+      dejitter.stop();
+
+      const raw = dejitter.getRaw();
+      raw.rawFrames.length = 0;
+      raw.interactions.length = 0;
+
+      // User clicks at t=50, first change at t=300 → 250ms lag
+      raw.interactions.push({ t: 50, type: 'pointerdown' });
+
+      raw.rawFrames.push({
+        t: 300,
+        changes: [{ id: 'synth0', transform: 'matrix(1, 0, 0, 1, 0, 5)' }],
+      });
+
+      return dejitter.findings(true);
+    });
+
+    const lags = findings.filter(f => f.type === 'lag');
+    expect(lags.length).toBe(1);
+    expect(lags[0].lag.delay).toBe(250);
+    expect(lags[0].severity).toBe('high');
+  });
+
+  test('lag: not triggered when response is fast', async ({ page }) => {
+    const findings = await page.evaluate(() => {
+      dejitter.configure({
+        selector: '.synth',
+        props: ['transform'],
+        idleTimeout: 0,
+        thresholds: {
+          lag: { minDelay: 50, highDelay: 200, medDelay: 100 },
+        },
+      });
+
+      let el = document.querySelector('.synth-target');
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'synth synth-target';
+        el.textContent = 'synth';
+        document.body.appendChild(el);
+      }
+      el.__dj_id = 'synth0';
+      el.__dj_label = { tag: 'div', cls: 'synth synth-target', text: 'synth' };
+
+      dejitter.start();
+      dejitter.stop();
+
+      const raw = dejitter.getRaw();
+      raw.rawFrames.length = 0;
+      raw.interactions.length = 0;
+
+      // User clicks at t=100, first change at t=116 → only 16ms
+      raw.interactions.push({ t: 100, type: 'click' });
+
+      raw.rawFrames.push({
+        t: 116,
+        changes: [{ id: 'synth0', transform: 'matrix(1, 0, 0, 1, 0, 5)' }],
+      });
+
+      return dejitter.findings(true);
+    });
+
+    const lags = findings.filter(f => f.type === 'lag');
+    expect(lags.length).toBe(0);
+  });
 });

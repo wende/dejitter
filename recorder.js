@@ -46,6 +46,7 @@
       stutter: { velocityRatio: 0.3, maxFrames: 3, minVelocity: 0.5 },
       stuck: { minStillFrames: 3, maxDelta: 0.5, minSurroundingVelocity: 1, highDuration: 500, medDuration: 200 },
       outlier: { ratioThreshold: 3 },
+      lag: { minDelay: 50, highDelay: 200, medDelay: 100 },
     },
   };
 
@@ -55,6 +56,7 @@
   let rafId = null;
   let stopTimer = null;
   let mutationObserver = null;
+  let interactionAbort = null;
 
   // Callbacks invoked after stop()
   let onStopCallbacks = [];
@@ -76,6 +78,9 @@
 
   // Mutation events (separate stream, always full resolution)
   let mutations = [];
+
+  // User interaction events (click, keydown, pointerdown) for lag detection
+  let interactions = [];
 
   // Element identity
   let nextElemId = 0;
@@ -203,6 +208,19 @@
     mutationObserver.observe(document.body, {
       childList: true, subtree: true, characterData: true,
     });
+  }
+
+  function startInteractionListeners() {
+    interactionAbort = new AbortController();
+    const opts = { capture: true, signal: interactionAbort.signal };
+    const handler = (e) => {
+      if (!recording) return;
+      const t = Math.round(performance.now() - startTime);
+      interactions.push({ t, type: e.type });
+    };
+    for (const evt of ['click', 'pointerdown', 'keydown']) {
+      document.addEventListener(evt, handler, opts);
+    }
   }
 
   // --- Downsampling ---
@@ -869,7 +887,55 @@
   }
 
   /**
-   * Section 7: deduplicate shivers — when many elements shiver at the same Hz on the
+   * Section 7: detect lag — time from a user interaction (click, keydown, pointerdown)
+   * to the first visual change exceeds a threshold (default 50ms).
+   */
+  function detectLagFindings(elements) {
+    const findings = [];
+    if (interactions.length === 0 || rawFrames.length === 0) return findings;
+
+    const lt = config.thresholds.lag;
+
+    for (const interaction of interactions) {
+      // Find the first rawFrame after this interaction
+      let firstFrame = null;
+      for (const frame of rawFrames) {
+        if (frame.t > interaction.t) {
+          firstFrame = frame;
+          break;
+        }
+      }
+
+      if (!firstFrame) continue;
+
+      const delay = firstFrame.t - interaction.t;
+      if (delay < lt.minDelay) continue;
+
+      const severity = delay >= lt.highDelay ? 'high' : delay >= lt.medDelay ? 'medium' : 'low';
+
+      const firstChange = firstFrame.changes[0];
+      const label = (firstChange && elements[firstChange.id]) || { tag: '?', cls: '', text: '' };
+
+      findings.push(makeFinding(
+        'lag', severity,
+        firstChange?.id || '?', label, interaction.type,
+        `${delay}ms between ${interaction.type} at t=${interaction.t}ms and first visual change at t=${firstFrame.t}ms`,
+        {
+          lag: {
+            interactionType: interaction.type,
+            interactionT: interaction.t,
+            firstChangeT: firstFrame.t,
+            delay,
+          },
+        }
+      ));
+    }
+
+    return findings;
+  }
+
+  /**
+   * Section 8: deduplicate shivers — when many elements shiver at the same Hz on the
    * same property, it's a single root-cause event. Group them and report the scroll
    * container (or first element) with an affectedElements count.
    */
@@ -913,6 +979,7 @@
     findings = findings.concat(detectJumpFindings(propStats, elements, findings));
     findings = findings.concat(detectStutterFindings(propStats, elements, findings));
     findings = findings.concat(detectStuckFindings(propStats, elements, findings));
+    findings = findings.concat(detectLagFindings(elements));
     findings = deduplicateShivers(findings);
 
     // Sort by severity
@@ -968,6 +1035,7 @@
     start() {
       rawFrames = [];
       mutations = [];
+      interactions = [];
       lastSeen = new Map();
       nextElemId = 0;
       recording = true;
@@ -976,6 +1044,7 @@
       hasSeenChange = false;
 
       startMutationObserver();
+      startInteractionListeners();
       rafId = requestAnimationFrame(loop);
 
       if (config.maxDuration > 0) {
@@ -990,6 +1059,7 @@
       if (rafId) cancelAnimationFrame(rafId);
       if (stopTimer) clearTimeout(stopTimer);
       mutationObserver?.disconnect();
+      interactionAbort?.abort();
 
       const msg = `Stopped. ${rawFrames.length} raw frames, ${mutations.length} mutation events.`;
       console.log(`[dejitter:stopped] ${msg}`);
@@ -1050,7 +1120,7 @@
 
     /** Access raw unprocessed frames (for debugging the recorder itself) */
     getRaw() {
-      return { rawFrames, mutations };
+      return { rawFrames, mutations, interactions };
     },
 
     toJSON() {
